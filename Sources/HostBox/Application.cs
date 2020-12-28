@@ -1,22 +1,12 @@
 ﻿using System;
-using System.Collections.Generic;
 using System.IO;
-using System.Linq;
-using System.Reflection;
 using System.Threading;
 using System.Threading.Tasks;
 
 using Common.Logging;
 
-using HostBox.Borderline;
-using HostBox.Configuration;
 using HostBox.Loading;
 
-using McMaster.NETCore.Plugins;
-
-using Microsoft.DotNet.PlatformAbstractions;
-using Microsoft.Extensions.Configuration;
-using Microsoft.Extensions.DependencyModel;
 using Microsoft.Extensions.Hosting;
 
 using IConfiguration = Microsoft.Extensions.Configuration.IConfiguration;
@@ -33,7 +23,7 @@ namespace HostBox
 
         private readonly IConfiguration appConfiguration;
 
-        private StartResult description;
+        private ComponentsLoader.StartResult description;
 
         public Application(IConfiguration appConfiguration, ComponentConfig config, IApplicationLifetime lifetime)
         {
@@ -143,121 +133,11 @@ namespace HostBox
             this.logger.Trace("Application stopped.");
         }
 
-        private StartResult LoadAndRunComponents(CancellationToken cancellationToken)
+        private ComponentsLoader.StartResult LoadAndRunComponents(CancellationToken cancellationToken)
         {
-            var loader = PluginLoader.CreateFromAssemblyFile(
-                this.ComponentConfig.Path,
-                new[]
-                    {
-                        typeof(Borderline.IConfiguration),
-                        typeof(DependencyContext)
-                    },
-                this.ComponentConfig.SharedLibraryPath);
-
-            var entryAssemblyName = loader.LoadDefaultAssembly().GetName(false);
-
-            var dc = DependencyContext.Load(loader.LoadDefaultAssembly());
-
-            var factories = new List<IHostableComponentFactory>();
-
-            var componentAssemblies = dc.GetRuntimeAssemblyNames(RuntimeEnvironment.GetRuntimeIdentifier())
-                .Where(n => n != entryAssemblyName)
-                .Select(loader.LoadAssembly)
-                .ToArray();
-
-            foreach (var assembly in componentAssemblies)
-            {
-                var componentFactoryTypes = assembly
-                    .GetExportedTypes()
-                    .Where(t => t.GetInterfaces().Any(i => i == typeof(IHostableComponentFactory)))
-                    .ToArray();
-
-                if (!componentFactoryTypes.Any())
-                {
-                    continue;
-                }
-
-                var instances = componentFactoryTypes
-                    .Select(Activator.CreateInstance)
-                    .Cast<IHostableComponentFactory>()
-                    .ToArray();
-
-                factories.AddRange(instances);
-            }
-
-            var cfg = ComponentConfiguration.Create(this.appConfiguration);
-
-            this.SetSharedLibrariesConfiguration(componentAssemblies);
-
-            var componentLoader = new ComponentAssemblyLoader(loader);
-
-            var components = factories
-                .Select(f => f.CreateComponent(componentLoader, cfg))
-                .ToArray();
-
-            var startTask = Task.Factory.StartNew(
-                () =>
-                    {
-                        foreach (var component in components)
-                        {
-                            component.Start();
-                        }
-                    },
-                cancellationToken,
-                TaskCreationOptions.LongRunning,
-                TaskScheduler.Default);
-
-            return new StartResult
-            {
-                Components = components,
-                StartTask = startTask
-            };
-        }
-
-        private void SetSharedLibrariesConfiguration(Assembly[] assemblies)
-        {
-            foreach (var componentAssembly in assemblies)
-            {
-                var configurationFactory = componentAssembly.GetExportedTypes()
-                    .FirstOrDefault(x => x.Name == "ConfigurationProvider");
-
-                if (configurationFactory != null)
-                {
-                    var method = configurationFactory.GetMethod("Set");
-
-                    if (method != null && method.IsStatic)
-                    {
-                        var parameters = method.GetParameters();
-
-                        if (parameters.Length == 1)
-                        {
-                            var libraryName = componentAssembly.GetName().Name.ToLower();
-                            var configType = parameters[0].ParameterType;
-                            
-                            var sharedLibConfiguration =
-                                this.appConfiguration
-                                .GetSection($"shared-libraries:{libraryName}")?
-                                .Get(configType);
-                            
-                            method.Invoke(
-                                null,
-                                new object[]
-                                    {
-                                        sharedLibConfiguration
-                                    });
-
-                            this.logger.Info(m => m($"Set configuration for shared library {libraryName}"));
-                        }
-                    }
-                }
-            }
-        }
-
-        private class StartResult
-        {
-            public IHostableComponent[] Components { get; set; }
-
-            public Task StartTask { get; set; }
+            return new ComponentsLoader(this.ComponentConfig)
+                .Load()
+                .Run(this.appConfiguration, cancellationToken);
         }
     }
 }

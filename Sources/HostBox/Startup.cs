@@ -5,12 +5,12 @@ namespace HostBox
 {
     public class Startup
     {
-        public void ConfigureServices(IServiceCollection services) => services.AddMvc();
+        public void ConfigureServices(IServiceCollection services)
+        {
+        }
 
         public void Configure(IApplicationBuilder app)
         {
-            app.UseHttpsRedirection();
-            app.UseMvc();
         }
     }
 }
