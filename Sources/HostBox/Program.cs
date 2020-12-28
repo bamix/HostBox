@@ -8,10 +8,13 @@ using Common.Logging.Configuration;
 
 using HostBox.Configuration;
 
+using Microsoft.AspNetCore;
+using Microsoft.AspNetCore.Hosting;
 using Microsoft.Extensions.CommandLineUtils;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.Configuration.Json;
 using Microsoft.Extensions.DependencyInjection;
+using Microsoft.Extensions.FileProviders;
 using Microsoft.Extensions.Hosting;
 
 namespace HostBox
@@ -28,7 +31,7 @@ namespace HostBox
             try
             {
                 commandLineArgs = GetCommandLineArgs(args);
-                
+
                 if (commandLineArgs.StartConfirmationRequired)
                 {
                     Console.WriteLine("Press enter to start");
@@ -37,8 +40,16 @@ namespace HostBox
 
                 if (commandLineArgs.CommandLineArgsValid)
                 {
-                    IHostBuilder builder = PrepareHostBuilder(commandLineArgs);
-                    await RunHost(builder);
+                    if (commandLineArgs.Web)
+                    {
+                        var builder = PrepareWebHostBuilder(commandLineArgs);
+                        await builder.Build().RunAsync();
+                    }
+                    else
+                    {
+                        var builder = PrepareHostBuilder(commandLineArgs);
+                        await RunHost(builder);
+                    }
                 }
             }
             catch (Exception ex)
@@ -51,7 +62,7 @@ namespace HostBox
                 {
                     Console.WriteLine($"Error: {ex}");
                 }
-                
+
                 throw;
             }
             finally
@@ -86,6 +97,88 @@ namespace HostBox
                     Logger.Fatal("Unable to start host due exception.", e);
                 }
             }
+        }
+
+        private static IWebHostBuilder PrepareWebHostBuilder(CommandLineArgs args)
+        {
+          var componentPath = Path.GetFullPath(args.Path, Directory.GetCurrentDirectory());
+          var application = new ApplicationWeb(new ComponentConfig
+              {
+                Path = componentPath,
+                SharedLibraryPath = args.SharedLibrariesPath,
+                LoggerFactory = LogManager.GetLogger
+              });
+
+          var startupType = application.LoadComponents();
+
+          var configurationRoot = new ConfigurationBuilder()
+              .SetBasePath(AppDomain.CurrentDomain.BaseDirectory)
+              .AddEnvironmentVariables()
+              .AddEnvironmentVariables("ASPNETCORE_")
+              .AddJsonFile("hostsettings.json", true, false)
+              .Build();
+
+          ConfigureLogging(configurationRoot);
+
+          Logger = LogManager.GetLogger<Program>();
+
+          var builder = WebHost.CreateDefaultBuilder()
+              .UseStartup<Startup>()
+              .UseConfiguration(configurationRoot)
+              .ConfigureAppConfiguration(
+                  (ctx, config) =>
+                      {
+                          config.AddEnvironmentVariables();
+                          var componentBasePath = Path.GetDirectoryName(componentPath);
+
+                          config.SetBasePath(componentBasePath);
+
+                          var configName = ctx.Configuration[ConfigurationNameEnvVariable];
+
+                          Logger.Info(m => m("Application was launched with configuration '{0}'.", configName));
+
+                          config.LoadSharedLibraryConfigurationFiles(
+                              Logger,
+                              componentBasePath,
+                              args.SharedLibrariesPath);
+
+                          var configProvider = new ConfigFileNamesProvider(configName, componentBasePath);
+
+                          var templateValuesSource =
+                              new JsonConfigurationSource
+                                  {
+                                      Path = configProvider.GetTemplateValuesFile(),
+                                      FileProvider = null,
+                                      ReloadOnChange = false,
+                                      Optional = true
+                                  };
+
+                          templateValuesSource.ResolveFileProvider();
+
+                          var templateValuesProvider = templateValuesSource.Build(config);
+
+                          templateValuesProvider.Load();
+
+                          foreach (var configFile in configProvider.EnumerateConfigFiles())
+                          {
+                              config.AddJsonTemplateFile(
+                                  configFile,
+                                  false,
+                                  false,
+                                  templateValuesProvider,
+                                  args.PlaceholderPattern);
+
+                              Logger.Trace(m => m("Configuration file [{0}] is loaded.", configFile));
+                          }
+                      })
+              .ConfigureServices((ctx, services) =>
+                  {
+                      application.Run(ctx.Configuration);
+                  });
+
+          ((IHostingStartup) Activator.CreateInstance(startupType)).Configure(builder);
+
+          return builder;
         }
 
         private static IHostBuilder PrepareHostBuilder(CommandLineArgs args)
@@ -188,14 +281,19 @@ namespace HostBox
                 "--placeholder-pattern",
                 "Pattern of placeholders to find and replace into the component configuration (default is '!{*}')",
                 CommandOptionType.SingleValue);
-            
+
             var confirmStartOpt = cmdLnApp.Option(
                 "-cs|--confirm-start",
                 "Requirement to ask for confirmation before starting the application",
                 CommandOptionType.NoValue);
-            
+
             var confirmFinishOpt = cmdLnApp.Option(
                 "-cf|--confirm-finish",
+                "Requirement to ask for confirmation before terminating the application",
+                CommandOptionType.NoValue);
+
+            var webOpt = cmdLnApp.Option(
+                "-w|--web",
                 "Requirement to ask for confirmation before terminating the application",
                 CommandOptionType.NoValue);
 
@@ -231,7 +329,7 @@ namespace HostBox
                     });
 
             CommandLineArgs cmdLnArgs= new CommandLineArgs();
-                
+
             try
             {
                 cmdLnApp.Execute(source);
@@ -241,7 +339,8 @@ namespace HostBox
                 cmdLnArgs.SharedLibrariesPath = sharedOpt.Value();
                 cmdLnArgs.StartConfirmationRequired = confirmStartOpt.HasValue();
                 cmdLnArgs.FinishConfirmationRequired = confirmFinishOpt.HasValue();
-                
+                cmdLnArgs.Web = webOpt.HasValue();
+
                 if (cmdLnApp.RemainingArguments?.Count > 0)
                 {
                     Console.WriteLine($"Unparsed args: {string.Join(",", cmdLnApp.RemainingArguments)}");
@@ -276,16 +375,18 @@ namespace HostBox
         private class CommandLineArgs
         {
             public bool CommandLineArgsValid;
-            
+
             public string Path { get; set; }
 
             public string PlaceholderPattern { get; set; }
 
             public string SharedLibrariesPath { get; set; }
-            
+
             public bool StartConfirmationRequired { get; set; }
-            
+
             public bool FinishConfirmationRequired { get; set; }
+
+            public bool Web { get; set; }
         }
     }
 }
