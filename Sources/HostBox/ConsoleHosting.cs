@@ -9,6 +9,9 @@ using Microsoft.Extensions.Hosting;
 
 namespace HostBox
 {
+    /// <summary>
+    /// Стратегия для запуска обычных компонентов
+    /// </summary>
     internal class ConsoleHosting : HostingBase
     {
         private readonly IHostBuilder builder;
@@ -45,6 +48,7 @@ namespace HostBox
                                 LoggerFactory = LogManager.GetLogger
                             });
 
+                        // регистрируем бэкграунд воркера
                         services.AddSingleton<IHostedService, Application>();
                     });
         }

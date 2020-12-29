@@ -53,6 +53,11 @@ namespace HostBox
             }
         }
 
+        /// <summary>
+        /// В версии .netcore 2.2 HostBuilder и WebHostBuilder это абсолютно разные классы. HostBuilder не позволяет создавать доступ к Web. Поэтому создаются разные стратегии
+        /// </summary>
+        /// <param name="commandLineArgs"></param>
+        /// <returns></returns>
         private static IHosting CreateHost(CommandLineArgs commandLineArgs)
         {
             if (commandLineArgs.Web)

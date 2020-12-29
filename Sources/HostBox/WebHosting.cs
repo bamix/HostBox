@@ -13,6 +13,9 @@ using Microsoft.Extensions.Configuration;
 
 namespace HostBox
 {
+    /// <summary>
+    /// Стратегия для запуска веб-компонентов
+    /// </summary>
     internal class WebHosting : HostingBase
     {
         protected override ILog Logger => LogManager.GetLogger<WebHosting>();

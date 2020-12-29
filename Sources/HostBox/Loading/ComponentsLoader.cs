@@ -20,6 +20,11 @@ using IConfiguration = Microsoft.Extensions.Configuration.IConfiguration;
 
 namespace HostBox.Loading
 {
+    /// <summary>
+    /// Обёртка над PluginLoader для разделения загрузки IHostableComponentFactory на 2 этапа:
+    /// 1. Загрузка всех assembly
+    /// 2. Создание и запуск IHostableComponentFactory
+    /// </summary>
     public class ComponentsLoader
     {
         private static readonly ILog Logger = LogManager.GetLogger<ComponentsLoader>();
