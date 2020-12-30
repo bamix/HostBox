@@ -2,9 +2,10 @@
   "profiles": {
     "Local": {
       "commandName": "Project",
-      "commandLineArgs": "--path c:\\Work\\Projects-git\\dialogs\\dialogs.winks\\dialogs.winks.presence.pipe\\trunk\\Sources\\Dialogs.Winks.Presence.Pipe.Instance\\bin\\Debug\\netcoreapp2.2\\win7-x64\\Dialogs.Winks.Presence.Pipe.Instance.dll",
+      "commandLineArgs": "--path E:\\sdv\\credits.accounts.manager\\Sources\\Credits.Accounts.Manager.Instance\\bin\\Debug\\netcoreapp2.2\\win7-x64\\Credits.Accounts.Manager.Instance.dll",
       "environmentVariables": {
-        "INSTANCE": "Development"
+        "INSTANCE": "Development",
+        "configuration": "development"
       }
     },
     "Remote": {
