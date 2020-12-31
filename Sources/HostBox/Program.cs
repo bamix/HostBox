@@ -1,6 +1,7 @@
 ﻿using System;
 using System.IO;
 using System.Linq;
+using System.Reflection;
 using System.Threading;
 using System.Threading.Tasks;
 
@@ -71,14 +72,15 @@ namespace HostBox
         private static IHostBuilder CreateHostBuilder(CommandLineArgs commandLineArgs)
         {
             var componentPath = Path.GetFullPath(commandLineArgs.Path, Directory.GetCurrentDirectory());
+            var assembly = Assembly.LoadFrom(componentPath);
             
-            var loader = new ComponentsLoader(
-                new ComponentConfig
-                {
-                    Path = componentPath,
-                    SharedLibraryPath = commandLineArgs.SharedLibrariesPath,
-                    LoggerFactory = LogManager.GetLogger
-                }).Load();
+            // var loader = new ComponentsLoader(
+            //     new ComponentConfig
+            //     {
+            //         Path = componentPath,
+            //         SharedLibraryPath = commandLineArgs.SharedLibrariesPath,
+            //         LoggerFactory = LogManager.GetLogger
+            //     }).Load();
             
             var builder = new HostBuilder()
                 .ConfigureHostConfiguration(
@@ -100,17 +102,28 @@ namespace HostBox
                 .ConfigureServices(
                     (ctx, services) =>
                     {
-                        loader.Run(ctx.Configuration, CancellationToken.None);
+                        // loader.Run(ctx.Configuration, CancellationToken.None);
                     });
             
             if (commandLineArgs.Web)
             {
-                var startupType = loader.EntryAssembly.GetExportedTypes()
-                    .First(t => typeof(IHostingStartup).IsAssignableFrom(t));
-                builder.ConfigureWebHost(b =>
+                Logger.Info(m => m("Start WEB"));
+                builder.ConfigureAppConfiguration((context, configurationBuilder) =>
                 {
-                    b.UseStartup<Startup>();
-                    ((IHostingStartup)Activator.CreateInstance(startupType))?.Configure(b);
+                    configurationBuilder.AddEnvironmentVariables("ASPNETCORE_");
+                });
+                
+                // var startupType = loader.EntryAssembly.GetExportedTypes()
+                //     .First(t => typeof(IHostingStartup).IsAssignableFrom(t));
+                
+                var startup = assembly.GetExportedTypes()
+                    .First(t => t.Name == "Startup");
+                
+                builder.ConfigureWebHostDefaults(b =>
+                {
+                    b.UseStartup(startup);
+                    // builder.Properties["UseStartup.StartupType"] = startup;
+                    // ((IHostingStartup)Activator.CreateInstance(startupType))?.Configure(b);
                 });
             }
 
