@@ -12,6 +12,7 @@ using HostBox.Loading;
 using Microsoft.AspNetCore.Hosting;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.Configuration.Json;
+using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Hosting;
 
 namespace HostBox
@@ -63,24 +64,17 @@ namespace HostBox
                 }
             }
         }
-
-        /// <summary>
-        /// В версии .netcore 2.2 HostBuilder и WebHostBuilder это абсолютно разные классы. HostBuilder не позволяет создавать доступ к Web. Поэтому создаются разные стратегии
-        /// </summary>
-        /// <param name="commandLineArgs"></param>
-        /// <returns></returns>
+        
         private static IHostBuilder CreateHostBuilder(CommandLineArgs commandLineArgs)
         {
             var componentPath = Path.GetFullPath(commandLineArgs.Path, Directory.GetCurrentDirectory());
-            var assembly = Assembly.LoadFrom(componentPath);
             
-            // var loader = new ComponentsLoader(
-            //     new ComponentConfig
-            //     {
-            //         Path = componentPath,
-            //         SharedLibraryPath = commandLineArgs.SharedLibrariesPath,
-            //         LoggerFactory = LogManager.GetLogger
-            //     }).Load();
+            var loader = new ComponentsLoader(
+                new ComponentConfig
+                {
+                    Path = componentPath,
+                    SharedLibraryPath = commandLineArgs.SharedLibrariesPath
+                }).LoadComponents();
             
             var builder = new HostBuilder()
                 .ConfigureHostConfiguration(
@@ -102,29 +96,36 @@ namespace HostBox
                 .ConfigureServices(
                     (ctx, services) =>
                     {
-                        // loader.Run(ctx.Configuration, CancellationToken.None);
+                        services.AddSingleton<ApplicationLifetimeLogger>();
+                        Directory.SetCurrentDirectory(Path.GetDirectoryName(componentPath));
+                        loader.RunComponents(ctx.Configuration, CancellationToken.None);
                     });
             
             if (commandLineArgs.Web)
             {
-                Logger.Info(m => m("Start WEB"));
-                builder.ConfigureAppConfiguration((context, configurationBuilder) =>
-                {
-                    configurationBuilder.AddEnvironmentVariables("ASPNETCORE_");
-                });
+                Logger.Info(m => m("Starting WEB"));
                 
-                // var startupType = loader.EntryAssembly.GetExportedTypes()
-                //     .First(t => typeof(IHostingStartup).IsAssignableFrom(t));
-                
-                var startup = assembly.GetExportedTypes()
-                    .First(t => t.Name == "Startup");
-                
-                builder.ConfigureWebHostDefaults(b =>
-                {
-                    b.UseStartup(startup);
-                    // builder.Properties["UseStartup.StartupType"] = startup;
-                    // ((IHostingStartup)Activator.CreateInstance(startupType))?.Configure(b);
-                });
+                builder
+                    .ConfigureAppConfiguration((context, configurationBuilder) =>
+                    {
+                        configurationBuilder.AddEnvironmentVariables("ASPNETCORE_");
+                    })
+                    .ConfigureServices(s =>
+                    {
+                        var startup = loader.EntryAssembly.GetExportedTypes().FirstOrDefault(t => typeof(IStartup).IsAssignableFrom(t));
+                        if (startup != null)
+                        {
+                            s.AddSingleton(typeof(IStartup), startup);
+                        }
+                        else
+                        {
+                            Logger.Error(m => m("Couldn't find a Startup class which is implementing IStartup"));
+                        }
+                    })
+                    .ConfigureWebHostDefaults(b =>
+                    {
+                        b.UseStartup<Startup>();
+                    });
             }
 
             return builder;

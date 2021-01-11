@@ -43,7 +43,7 @@ namespace HostBox
 
             var webOpt = cmdLnApp.Option(
                 "-w|--web",
-                "Requirement to ask for confirmation before terminating the application",
+                "Runs HostBox as a web application",
                 CommandOptionType.NoValue);
 
             var defaultSharedPath =  Environment.GetEnvironmentVariable("SHARED_LIBRARIES_PATH") ?? Path.Combine("..", "shared", "libraries");

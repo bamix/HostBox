@@ -2,7 +2,7 @@
   "profiles": {
     "Local": {
       "commandName": "Project",
-      "commandLineArgs": "--path E:\\sdv\\credits.accounts.manager\\Sources\\Credits.Accounts.Manager.Instance\\bin\\Debug\\netcoreapp2.2\\win7-x64\\Credits.Accounts.Manager.Instance.dll",
+      "commandLineArgs": "--path E:\\sdv\\notifications.presents.pipe\\Sources\\Notifications.Presents.Pipe.Instance\\bin\\Debug\\netcoreapp3.0\\Notifications.Presents.Pipe.Instance.dll -w",
       "environmentVariables": {
         "INSTANCE": "Development",
         "configuration": "development"

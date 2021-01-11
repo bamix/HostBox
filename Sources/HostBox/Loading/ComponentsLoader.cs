@@ -49,7 +49,7 @@ namespace HostBox.Loading
                 config.SharedLibraryPath);
         }
 
-        public ComponentsLoader Load()
+        public ComponentsLoader LoadComponents()
         {
             this.EntryAssembly = this.loader.LoadDefaultAssembly();
             var entryAssemblyName = this.EntryAssembly.GetName(false);
@@ -84,7 +84,7 @@ namespace HostBox.Loading
             return this;
         }
 
-        public StartResult Run(IConfiguration configuration, CancellationToken cancellationToken)
+        public StartResult RunComponents(IConfiguration configuration, CancellationToken cancellationToken)
         {
             var cfg = ComponentConfiguration.Create(configuration);
 
