@@ -106,10 +106,6 @@ namespace HostBox
                 Logger.Info(m => m("Starting WEB"));
                 
                 builder
-                    .ConfigureAppConfiguration((context, configurationBuilder) =>
-                    {
-                        configurationBuilder.AddEnvironmentVariables("ASPNETCORE_");
-                    })
                     .ConfigureServices(s =>
                     {
                         var startup = loader.EntryAssembly.GetExportedTypes().FirstOrDefault(t => typeof(IStartup).IsAssignableFrom(t));
