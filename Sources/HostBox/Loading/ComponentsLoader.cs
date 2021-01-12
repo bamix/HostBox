@@ -25,17 +25,11 @@ namespace HostBox.Loading
     /// 1. Загрузка всех assembly
     /// 2. Создание и запуск IHostableComponentFactory
     /// </summary>
-    public class ComponentsLoader
+    internal class ComponentsLoader
     {
         private static readonly ILog Logger = LogManager.GetLogger<ComponentsLoader>();
 
         private readonly PluginLoader loader;
-
-        public Assembly EntryAssembly { get; private set; }
-
-        public Assembly[] ComponentsAssemblies { get; private set; }
-
-        public List<IHostableComponentFactory> Factories { get; } = new List<IHostableComponentFactory>();
 
         public ComponentsLoader(ComponentConfig config)
         {
@@ -49,19 +43,32 @@ namespace HostBox.Loading
                 config.SharedLibraryPath);
         }
 
-        public ComponentsLoader LoadComponents()
+        public LoadAndRunComponentsResult LoadAndRunComponents(IConfiguration configuration, CancellationToken cancellationToken)
         {
-            this.EntryAssembly = this.loader.LoadDefaultAssembly();
-            var entryAssemblyName = this.EntryAssembly.GetName(false);
+            var loadComponentsResult = this.LoadComponents();
+            this.RunComponents(loadComponentsResult.ComponentsFactories, loadComponentsResult.ComponentAssemblies, configuration, cancellationToken);
+            
+            return new LoadAndRunComponentsResult
+            {
+                EntryAssembly = loadComponentsResult.EntryAssembly
+            };
+        }
+
+        private LoadComponentsResult LoadComponents()
+        {
+            var entryAssembly = this.loader.LoadDefaultAssembly();
+            var entryAssemblyName = entryAssembly.GetName(false);
 
             var dc = DependencyContext.Load(this.loader.LoadDefaultAssembly());
 
-            this.ComponentsAssemblies = dc.GetRuntimeAssemblyNames(RuntimeEnvironment.GetRuntimeIdentifier())
+            var componentsAssemblies = dc.GetRuntimeAssemblyNames(RuntimeEnvironment.GetRuntimeIdentifier())
                 .Where(n => n != entryAssemblyName)
                 .Select(this.loader.LoadAssembly)
                 .ToArray();
+            
+            var factories = new List<IHostableComponentFactory>();
 
-            foreach (var assembly in this.ComponentsAssemblies)
+            foreach (var assembly in componentsAssemblies)
             {
                 var componentFactoryTypes = assembly
                     .GetExportedTypes()
@@ -78,21 +85,26 @@ namespace HostBox.Loading
                     .Cast<IHostableComponentFactory>()
                     .ToArray();
 
-                this.Factories.AddRange(instances);
+                factories.AddRange(instances);
             }
 
-            return this;
+            return new LoadComponentsResult
+            {
+                EntryAssembly = entryAssembly,
+                ComponentAssemblies = componentsAssemblies,
+                ComponentsFactories = factories
+            };
         }
 
-        public StartResult RunComponents(IConfiguration configuration, CancellationToken cancellationToken)
+        private RunComponentsResult RunComponents(IEnumerable<IHostableComponentFactory> factories, IEnumerable<Assembly> componentsAssemblies, IConfiguration configuration, CancellationToken cancellationToken)
         {
             var cfg = ComponentConfiguration.Create(configuration);
 
-            this.SetSharedLibrariesConfiguration(configuration);
+            this.SetSharedLibrariesConfiguration(configuration, componentsAssemblies);
 
             var componentLoader = new ComponentAssemblyLoader(this.loader);
 
-            var components = this.Factories
+            var components = factories
                 .Select(f => f.CreateComponent(componentLoader, cfg))
                 .ToArray();
 
@@ -108,16 +120,16 @@ namespace HostBox.Loading
                 TaskCreationOptions.LongRunning,
                 TaskScheduler.Default);
 
-            return new StartResult
+            return new RunComponentsResult
                 {
                     StartTask = task,
                     Components = components
                 };
         }
 
-        private void SetSharedLibrariesConfiguration(IConfiguration configuration)
+        private void SetSharedLibrariesConfiguration(IConfiguration configuration, IEnumerable<Assembly> componentsAssemblies)
         {
-            foreach (var componentAssembly in this.ComponentsAssemblies)
+            foreach (var componentAssembly in componentsAssemblies)
             {
                 var configurationFactory = componentAssembly.GetExportedTypes()
                     .FirstOrDefault(x => x.Name == "ConfigurationProvider");
@@ -154,11 +166,25 @@ namespace HostBox.Loading
             }
         }
 
-        public class StartResult
+        private class LoadComponentsResult
+        {
+            public Assembly EntryAssembly { get; set; }
+            
+            public IEnumerable<Assembly> ComponentAssemblies { get; set; }
+            
+            public IEnumerable<IHostableComponentFactory> ComponentsFactories { get; set; }
+        }
+
+        private class RunComponentsResult
         {
             public IHostableComponent[] Components { get; set; }
 
             public Task StartTask { get; set; }
+        }
+        
+        internal class LoadAndRunComponentsResult
+        {
+            public Assembly EntryAssembly { get; set; }
         }
     }
 }

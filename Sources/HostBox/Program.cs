@@ -1,7 +1,6 @@
 ﻿using System;
 using System.IO;
 using System.Linq;
-using System.Reflection;
 using System.Threading;
 using System.Threading.Tasks;
 
@@ -69,13 +68,6 @@ namespace HostBox
         {
             var componentPath = Path.GetFullPath(commandLineArgs.Path, Directory.GetCurrentDirectory());
             
-            var loader = new ComponentsLoader(
-                new ComponentConfig
-                {
-                    Path = componentPath,
-                    SharedLibraryPath = commandLineArgs.SharedLibrariesPath
-                }).LoadComponents();
-            
             var builder = new HostBuilder()
                 .ConfigureHostConfiguration(
                     config =>
@@ -98,26 +90,33 @@ namespace HostBox
                     {
                         services.AddSingleton<ApplicationLifetimeLogger>();
                         Directory.SetCurrentDirectory(Path.GetDirectoryName(componentPath));
-                        loader.RunComponents(ctx.Configuration, CancellationToken.None);
+
+                        var loadAndRunComponentsResult = new ComponentsLoader(
+                            new ComponentConfig
+                            {
+                                Path = componentPath,
+                                SharedLibraryPath = commandLineArgs.SharedLibrariesPath
+                            }).LoadAndRunComponents(ctx.Configuration, CancellationToken.None);
+                        
+                        if (commandLineArgs.Web)
+                        {
+                            var startup = loadAndRunComponentsResult?.EntryAssembly?.GetExportedTypes().FirstOrDefault(t => typeof(IStartup).IsAssignableFrom(t));
+                            if (startup != null)
+                            {
+                                services.AddSingleton(typeof(IStartup), startup);
+                            }
+                            else
+                            {
+                                Logger.Error(m => m("Couldn't find a Startup class which is implementing IStartup"));
+                            }
+                        }
+
+                        services.AddHostedService<ApplicationLifetimeLogger>();
                     });
             
             if (commandLineArgs.Web)
             {
-                Logger.Info(m => m("Starting WEB"));
-                
                 builder
-                    .ConfigureServices(s =>
-                    {
-                        var startup = loader.EntryAssembly.GetExportedTypes().FirstOrDefault(t => typeof(IStartup).IsAssignableFrom(t));
-                        if (startup != null)
-                        {
-                            s.AddSingleton(typeof(IStartup), startup);
-                        }
-                        else
-                        {
-                            Logger.Error(m => m("Couldn't find a Startup class which is implementing IStartup"));
-                        }
-                    })
                     .ConfigureWebHostDefaults(b =>
                     {
                         b.UseStartup<Startup>();
