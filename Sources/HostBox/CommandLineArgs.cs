@@ -14,6 +14,8 @@
 
         public bool FinishConfirmationRequired { get; set; }
 
+#if NETCOREAPP3_1
         public bool Web { get; set; }
+#endif
     }
 }

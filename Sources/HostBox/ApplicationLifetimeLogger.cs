@@ -8,13 +8,23 @@ namespace HostBox
     public class ApplicationLifetimeLogger : IHostedService
     {
         private static readonly ILog Logger = LogManager.GetLogger<ApplicationLifetimeLogger>();
-        
+       
+#if NETCOREAPP3_1
         public ApplicationLifetimeLogger(IHostApplicationLifetime lifetime)
         {
             lifetime.ApplicationStarted.Register(OnStarted);
             lifetime.ApplicationStopping.Register(OnStopping);
             lifetime.ApplicationStopped.Register(OnStopped);
         }
+#endif
+#if NETCOREAPP2_2
+        public ApplicationLifetimeLogger(IApplicationLifetime lifetime)
+        {
+            lifetime.ApplicationStarted.Register(OnStarted);
+            lifetime.ApplicationStopping.Register(OnStopping);
+            lifetime.ApplicationStopped.Register(OnStopped);
+        }
+#endif
 
         public Task StartAsync(CancellationToken cancellationToken)
         {

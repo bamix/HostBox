@@ -1,4 +1,6 @@
-﻿using Microsoft.AspNetCore.Builder;
+﻿#if NETCOREAPP3_1
+
+using Microsoft.AspNetCore.Builder;
 using Microsoft.AspNetCore.Hosting;
 using Microsoft.Extensions.DependencyInjection;
 
@@ -23,3 +25,4 @@ namespace HostBox
         }
     }
 }
+#endif

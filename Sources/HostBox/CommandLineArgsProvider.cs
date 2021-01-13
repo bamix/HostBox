@@ -40,11 +40,12 @@ namespace HostBox
                 "-cf|--confirm-finish",
                 "Requirement to ask for confirmation before terminating the application",
                 CommandOptionType.NoValue);
-
+#if NETCOREAPP3_1
             var webOpt = cmdLnApp.Option(
                 "-w|--web",
                 "Runs HostBox as a web application",
                 CommandOptionType.NoValue);
+#endif
 
             var defaultSharedPath =  Environment.GetEnvironmentVariable("SHARED_LIBRARIES_PATH") ?? Path.Combine("..", "shared", "libraries");
             var sharedOpt = cmdLnApp.Option(
@@ -88,7 +89,10 @@ namespace HostBox
                 cmdLnArgs.SharedLibrariesPath = sharedOpt.Value();
                 cmdLnArgs.StartConfirmationRequired = confirmStartOpt.HasValue();
                 cmdLnArgs.FinishConfirmationRequired = confirmFinishOpt.HasValue();
+
+#if NETCOREAPP3_1
                 cmdLnArgs.Web = webOpt.HasValue();
+#endif
 
                 if (cmdLnApp.RemainingArguments?.Count > 0)
                 {

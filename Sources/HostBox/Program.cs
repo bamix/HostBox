@@ -8,7 +8,11 @@ using Common.Logging;
 using Common.Logging.Configuration;
 using HostBox.Configuration;
 using HostBox.Loading;
+
+#if NETCOREAPP3_1
 using Microsoft.AspNetCore.Hosting;
+#endif
+
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.Configuration.Json;
 using Microsoft.Extensions.DependencyInjection;
@@ -19,7 +23,7 @@ namespace HostBox
     internal class Program
     {
         private const string ConfigurationNameEnvVariable = "configuration";
-        private static ILog Logger => LogManager.GetLogger<Program>();
+        private static ILog Logger { get; set; }
 
         private static async Task Main(string[] args = null)
         {
@@ -79,6 +83,10 @@ namespace HostBox
                         config.AddJsonFile("hostsettings.json", true, false);
 
                         ConfigureLogging(config.Build());
+                        
+                        Logger = LogManager.GetLogger<Program>();
+
+                        Logger.Trace(m => m("Starting hostbox."));
                     })
                 .ConfigureAppConfiguration(
                     (ctx, config) =>
@@ -88,7 +96,6 @@ namespace HostBox
                 .ConfigureServices(
                     (ctx, services) =>
                     {
-                        services.AddSingleton<ApplicationLifetimeLogger>();
                         Directory.SetCurrentDirectory(Path.GetDirectoryName(componentPath));
 
                         var loadAndRunComponentsResult = new ComponentsLoader(
@@ -98,6 +105,7 @@ namespace HostBox
                                 SharedLibraryPath = commandLineArgs.SharedLibrariesPath
                             }).LoadAndRunComponents(ctx.Configuration, CancellationToken.None);
                         
+#if NETCOREAPP3_1
                         if (commandLineArgs.Web)
                         {
                             var startup = loadAndRunComponentsResult?.EntryAssembly?.GetExportedTypes().FirstOrDefault(t => typeof(IStartup).IsAssignableFrom(t));
@@ -110,10 +118,12 @@ namespace HostBox
                                 Logger.Error(m => m("Couldn't find a Startup class which is implementing IStartup"));
                             }
                         }
+#endif
 
                         services.AddHostedService<ApplicationLifetimeLogger>();
                     });
-            
+
+#if NETCOREAPP3_1
             if (commandLineArgs.Web)
             {
                 builder
@@ -122,6 +132,7 @@ namespace HostBox
                         b.UseStartup<Startup>();
                     });
             }
+#endif
 
             return builder;
         }
